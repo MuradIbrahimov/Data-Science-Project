@@ -2,117 +2,182 @@
 
 ## Project Overview
 
-This project analyzes the determinants of life expectancy across countries using socioeconomic, demographic, and health-related variables. Beyond predictive accuracy, the main objective is to assess how well machine learning models generalize across time and across countries.
+This project investigates the determinants of **life expectancy across countries and over time** using a global country–year dataset that combines economic, demographic, health, infrastructure, and nutrition indicators.
 
-Because life expectancy data is structured by both country and year, particular attention is paid to evaluation design in order to avoid overly optimistic conclusions.
-
----
-
-## Dataset Description
-
-The dataset consists of country–year observations, where each row corresponds to a specific country in a given year. The target variable is life expectancy, and the feature set includes:
-
-- Economic indicators (e.g., GDP per capita)
-- Health indicators (e.g., infant mortality rate)
-- Demographic variables
-- Nutritional and dietary indicators (where available)
+Beyond predictive accuracy, the **central goal** of the project is to evaluate **how well machine learning models generalize** under increasingly realistic conditions. Because life expectancy data is structured as a panel (country × year), careful evaluation design is essential to avoid overly optimistic conclusions.
 
 ---
 
-## Data Preprocessing
+## Key Objectives
 
-All models are trained using a unified preprocessing pipeline implemented with scikit-learn. This pipeline ensures consistency and prevents data leakage by applying all transformations within the training process only.
-
-Preprocessing steps include:
-- Handling missing values
-- Scaling numerical variables
-- One-hot encoding of categorical variables
+- Explain life expectancy using interpretable, mechanism-driven predictors  
+- Compare linear and nonlinear models on structured global data  
+- Quantify how performance changes under different generalization settings  
+- Demonstrate why random train–test splits can be misleading in panel data  
 
 ---
 
-## Modeling Approach
+## Dataset
 
-Multiple regression-based and tree-based models are evaluated. Each model is embedded within a preprocessing–model pipeline to ensure that preprocessing is applied identically across models and evaluation settings.
+- **Unit of observation:** Country–Year–Gender  
+- **Time span:** 1990–2019  
+- **Target variable:** Life Expectancy  
+- **Final sample size:** 18,630 rows (after filtering non-country aggregates)
 
----
+### Important data scope decision
 
-## Evaluation Strategy
-
-To assess model robustness and generalization ability, three train–test splitting strategies are used. These represent increasing levels of difficulty.
-
-### Random Split
-
-In the random split setting, all country–year observations are randomly divided into training (80%) and testing (20%) sets.
-
-This is the simplest evaluation scenario and serves as a baseline. Because observations from the same country can appear in both the training and test sets, performance estimates under this split tend to be optimistic. Results from this setting should therefore be interpreted as an upper bound on model performance.
+Non-country aggregate entities (e.g. *“Africa”*, *“High-income countries”*) are removed prior to modeling. These aggregates exhibit extreme missingness and do not represent real countries, which would otherwise distort both descriptive analysis and model training.
 
 ---
 
-### Time-Based Split
+## Features
 
-In the time-based split, the model is trained on observations from years up to and including 2012 and tested on observations from years after 2012.
+Features are selected based on **theoretical relevance** and **data coverage**, not purely on availability.
 
-This evaluation setting examines whether relationships learned from historical data generalize to future periods. It more closely resembles a real-world forecasting scenario and is more challenging than random splitting due to temporal changes in economic and health conditions.
+### Main feature groups
 
----
+- **Economic development**
+  - log(GDP per capita)
 
-### Country-Based Split
+- **Mortality burden**
+  - Infant mortality rate  
+  - Under-5 mortality rate  
+  - Neonatal mortality rate  
+  - Maternal mortality ratio (used cautiously)
 
-In the country-based split, training and testing sets are separated by country using group-based splitting. Entire countries are held out from training and appear only in the test set.
+- **Demographic structure**
+  - Population age shares (0–14, 15–64, 65+)  
+  - Dependency ratio (engineered)
 
-This is the most demanding evaluation scenario. The model must predict life expectancy for countries it has never seen before, making this split a strong test of true cross-country generalization.
+- **Infrastructure & public health**
+  - Basic drinking water access  
+  - Basic sanitation services  
+  - Clean fuel and technology
 
----
+- **Nutrition**
+  - Calories from animal protein  
+  - Calories from plant protein  
+  - Fat and carbohydrate calories  
+  - Animal-to-plant protein ratio (engineered)
 
-## Model Training and Evaluation Procedure
-
-For each train–test split and each model, the following procedure is applied:
-
-1. Construct a preprocessing–model pipeline  
-2. Train the model on the training set  
-3. Evaluate predictive performance on the test set using error-based metrics  
-4. Estimate feature importance on the test data  
-
-This ensures fair comparison across models and evaluation settings.
-
----
-
-## Feature Importance Analysis
-
-Feature importance is estimated using permutation importance computed on the transformed feature space produced by the preprocessing pipeline.
-
-Permutation importance measures the increase in prediction error when a feature’s values are randomly permuted, capturing the feature’s contribution to predictive performance. Computing importance on the transformed feature space ensures that importance scores correspond to the actual inputs used by the model, including features created through one-hot encoding.
-
-Where available, native model-specific importance measures (such as coefficients or tree-based importances) are also recorded for comparison.
+Sparse variables with very high missingness (e.g. medical personnel counts, tobacco/alcohol indicators) are excluded to avoid unstable estimation.
 
 ---
 
-## Results Interpretation
+## Preprocessing
 
-Model performance consistently follows the pattern:
+All models use a **single scikit-learn pipeline** to prevent data leakage:
 
-**Random split → Time-based split → Country-based split**
+- Numeric features: median imputation + standardization  
+- Categorical features: most-frequent imputation + one-hot encoding  
+- All transformations are learned **only on training data**
 
-This monotonic decline in performance reflects increasing evaluation difficulty. The gap between random and country-based results highlights the importance of country-specific structures in determining life expectancy and underscores the challenges of generalizing predictions to unseen countries.
+---
+
+## Models
+
+The following models are evaluated to balance interpretability and flexibility:
+
+- Linear Regression  
+- Ridge Regression  
+- Lasso Regression  
+- Random Forest  
+- HistGradientBoostingRegressor  
+
+---
+
+## Evaluation Design: Three Train–Test Splits
+
+Model performance is evaluated under **three increasingly difficult generalization settings**.
+
+### 1. Random Split (Baseline)
+
+- Random 80/20 split of country–year observations  
+- Same countries appear in both train and test sets  
+
+This setting yields **optimistic performance** and serves as an **upper bound**.
+
+---
+
+### 2. Time-Based Split
+
+- Train: years ≤ 2012  
+- Test: years > 2012  
+
+Tests whether relationships learned from historical data generalize to **future periods**.
+
+---
+
+### 3. Country-Based Split (Most Important)
+
+- Entire countries are held out using group-based splitting  
+- Test set contains **countries never seen during training**
+
+This is the **most realistic and demanding scenario**, requiring true cross-country generalization.
+
+The country-based split prevents the model from exploiting stable country-specific patterns and exposes the limits of generalization.
+
+---
+
+## Results Summary
+
+Performance follows a consistent and interpretable pattern:
+
+**Random split → Time split → Country split**
+
+| Split   | Best Model           | MAE (years) | RMSE | R²   |
+|--------|----------------------|-------------|------|------|
+| Random | Random Forest        | ~0.41       | ~0.62| ~0.996 |
+| Time   | HistGradientBoosting | ~1.16       | ~1.68| ~0.956 |
+| Country| HistGradientBoosting | ~1.43       | ~2.03| ~0.941 |
+
+---
+
+## Why Country-Split Performance Drops
+
+Country identity implicitly encodes many latent factors not fully captured by observed features, including:
+
+- Institutional quality and governance  
+- Geography and climate  
+- Historical shocks and conflict  
+- Measurement and reporting differences  
+
+Removing access to country identity forces the model to rely only on **generalizable structural relationships**, which explains the observed performance drop.
+
+---
+
+## Multivariate Structure (PCA)
+
+Principal Component Analysis shows that:
+
+- A small number of components capture most variance  
+- The first component aligns with **demographic pressure and mortality burden**  
+- Life expectancy varies primarily along this latent dimension  
+- Countries cluster into interpretable development groups  
+
+This confirms that life expectancy is shaped by **bundles of conditions**, not isolated variables.
 
 ---
 
 ## Key Takeaways
 
-- Random train–test splits provide optimistic performance estimates.
-- Time-based splits reveal temporal instability in learned relationships.
-- Country-based splits provide the strongest test of generalization.
-- Proper evaluation design is critical when modeling global health outcomes.
+- Evaluation design matters as much as model choice  
+- Random splits can be misleading in panel datasets  
+- Country-based splits provide the strongest generalization test  
+- Nonlinear models generalize better across countries  
 
 ---
 
 ## Reproducibility
 
-All experiments are fully reproducible. Random seeds are fixed where applicable, and all preprocessing and modeling steps are implemented within scikit-learn pipelines to prevent data leakage.
+- Random seeds are fixed  
+- All preprocessing is pipeline-based  
+- Results are fully reproducible  
 
 ---
 
 ## Author
 
-Murad  
-Data Science Project
+**Murad Ibrahimov**  
+Data Science Project  
+Kaunas University of Technology
